@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	"azlo-test-suite/dashboard"
-	"azlo-test-suite/handlers"
+	"azlo-test-suite/dashboard" // <-- Replace
+	"azlo-test-suite/handlers"  // <-- Replace
 
 	"github.com/gorilla/mux"
 )
@@ -27,6 +27,7 @@ func main() {
 	r.HandleFunc("/ws", h.HandleWebSocket)
 	r.HandleFunc("/run-tests", h.HandleRunTests).Methods("POST")
 	r.HandleFunc("/coverage/{package}", h.ServeCoverageData)
+	r.HandleFunc("/html-coverage/{filename}", h.HandleHTMLCoverage).Methods("GET")
 
 	// New project path management routes
 	r.HandleFunc("/set-project-path", h.HandleSetProjectPath).Methods("POST")

@@ -86,8 +86,13 @@ function createPackageHTML(result) {
     const coverageClass = getCoverageClass(result.coverage || 0);
     const duration = result.duration ? (result.duration / 1000000).toFixed(0) : '0';
 
-    const coverageButton = result.files && result.files.length > 0 ?
-        `<button class="coverage-link" onclick="event.stopPropagation(); showCoverage('${escapeHtml(result.package || '')}')">View Coverage</button>` : '';
+    let coverageButtons = '';
+    if (result.files && result.files.length > 0) {
+        coverageButtons += `<button class="coverage-link" onclick="event.stopPropagation(); showCoverage('${escapeHtml(result.package || '')}')">📊 View Coverage</button>`;
+    }
+    if (result.html_coverage_file) {
+        coverageButtons += `<button class="coverage-link html-coverage-link" onclick="event.stopPropagation(); openHTMLCoverage('${escapeHtml(result.html_coverage_file || '')}')">📋 HTML Report</button>`;
+    }
 
     return `
         <div class="package-result ${statusClass}">
@@ -101,7 +106,7 @@ function createPackageHTML(result) {
             </div>
             <div class="package-details">
                 <div class="test-output">${escapeHtml(result.output || '')}</div>
-                ${coverageButton}
+                <div class="coverage-buttons">${coverageButtons}</div>
             </div>
         </div>`;
 }
@@ -225,6 +230,17 @@ async function loadCurrentProjectInfo() {
 }
 
 // --- COVERAGE FUNCTIONS (unchanged) ---
+
+function openHTMLCoverage(filename) {
+    if (!filename) {
+        alert('HTML coverage report not available');
+        return;
+    }
+    
+    // Open the HTML coverage report in a new tab/window
+    const url = `/html-coverage/${encodeURIComponent(filename)}`;
+    window.open(url, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+}
 
 function showCoverage(packageName) {
     document.getElementById('coverage-package-name').textContent = `${packageName} Coverage`;

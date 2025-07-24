@@ -33,13 +33,14 @@ type FileCoverage struct {
 }
 
 type TestResult struct {
-	Package   string         `json:"package"`
-	Passed    bool           `json:"passed"`
-	Output    string         `json:"output"`
-	Duration  time.Duration  `json:"duration"`
-	Coverage  float64        `json:"coverage"`
-	Files     []FileCoverage `json:"files"`
-	Timestamp time.Time      `json:"timestamp"`
+	Package          string         `json:"package"`
+	Passed           bool           `json:"passed"`
+	Output           string         `json:"output"`
+	Duration         time.Duration  `json:"duration"`
+	Coverage         float64        `json:"coverage"`
+	Files            []FileCoverage `json:"files"`
+	Timestamp        time.Time      `json:"timestamp"`
+	HTMLCoverageFile string         `json:"html_coverage_file,omitempty"` // New field
 }
 
 type DashboardData struct {
@@ -59,17 +60,19 @@ type TestDashboard struct {
 	Clients     map[*websocket.Conn]bool
 	Broadcast   chan DashboardData
 	Upgrader    websocket.Upgrader
-	ProjectPath string // Current project path
+	ProjectPath string               // Current project path
+	HTMLFiles   map[string]time.Time // Track HTML files for cleanup
 }
 
 func NewTestDashboard() *TestDashboard {
 	// Default to current directory
 	currentDir, _ := os.Getwd()
 
-	return &TestDashboard{
+	td := &TestDashboard{
 		Clients:     make(map[*websocket.Conn]bool),
 		Broadcast:   make(chan DashboardData),
 		ProjectPath: currentDir,
+		HTMLFiles:   make(map[string]time.Time),
 		Data: DashboardData{
 			ProjectPath: currentDir,
 			ProjectName: filepath.Base(currentDir),
@@ -80,6 +83,11 @@ func NewTestDashboard() *TestDashboard {
 			},
 		},
 	}
+
+	// Start cleanup routine for old HTML files
+	go td.cleanupHTMLFiles()
+
+	return td
 }
 
 // --- Exported Methods (for use by handlers/main) ---
@@ -237,7 +245,15 @@ func (td *TestDashboard) runPackageTests(pkg string) TestResult {
 		strings.ReplaceAll(strings.ReplaceAll(pkg, "/", "_"), string(filepath.Separator), "_"),
 		time.Now().UnixNano())
 
-	defer os.Remove(coverProfile)
+	// Also create HTML coverage report
+	htmlCoverageFile := fmt.Sprintf("coverage_%s_%d.html",
+		strings.ReplaceAll(strings.ReplaceAll(pkg, "/", "_"), string(filepath.Separator), "_"),
+		time.Now().UnixNano())
+
+	defer func() {
+		os.Remove(coverProfile)
+		// Don't remove HTML file immediately - let cleanup routine handle it
+	}()
 
 	// Change to project directory and run tests
 	originalDir, _ := os.Getwd()
@@ -285,6 +301,14 @@ func (td *TestDashboard) runPackageTests(pkg string) TestResult {
 	if fileExists(coveragePath) {
 		result.Coverage = extractCoverage(string(output))
 		result.Files = td.parseCoverageProfile(coveragePath, pkg)
+
+		// Generate HTML coverage report
+		htmlPath := filepath.Join(td.ProjectPath, htmlCoverageFile)
+		if td.generateHTMLCoverage(coveragePath, htmlPath) {
+			result.HTMLCoverageFile = htmlCoverageFile
+			// Track HTML file for cleanup (keep for 1 hour)
+			td.HTMLFiles[htmlCoverageFile] = time.Now().Add(1 * time.Hour)
+		}
 	}
 
 	return result
@@ -397,6 +421,212 @@ func (td *TestDashboard) findGoPackages(root string) ([]string, error) {
 	return packages, err
 }
 
+// generateHTMLCoverage creates an HTML coverage report using go tool cover
+func (td *TestDashboard) generateHTMLCoverage(profilePath, htmlPath string) bool {
+	// Change to project directory for go tool cover
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+
+	err := os.Chdir(td.ProjectPath)
+	if err != nil {
+		log.Printf("Error changing to project directory for HTML coverage: %v", err)
+		return false
+	}
+
+	// Use go tool cover to generate HTML
+	cmd := exec.Command("go", "tool", "cover", "-html="+filepath.Base(profilePath), "-o", filepath.Base(htmlPath))
+	cmd.Dir = td.ProjectPath
+
+	if err := cmd.Run(); err != nil {
+		log.Printf("Error generating HTML coverage: %v", err)
+		return false
+	}
+
+	return fileExists(htmlPath)
+}
+
+// GetHTMLCoverage returns the HTML coverage content with custom styling injected
+func (td *TestDashboard) GetHTMLCoverage(filename string) (string, error) {
+	htmlPath := filepath.Join(td.ProjectPath, filename)
+
+	if !fileExists(htmlPath) {
+		return "", fmt.Errorf("HTML coverage file not found: %s", filename)
+	}
+
+	content, err := os.ReadFile(htmlPath)
+	if err != nil {
+		return "", fmt.Errorf("error reading HTML coverage file: %v", err)
+	}
+
+	// Inject our custom CSS into the Go-generated HTML
+	htmlContent := string(content)
+	customCSS := td.getCustomCoverageCSS()
+
+	// Find the </head> tag and inject our CSS before it
+	if headEndIndex := strings.Index(htmlContent, "</head>"); headEndIndex != -1 {
+		htmlContent = htmlContent[:headEndIndex] +
+			"\n<style>\n" + customCSS + "\n</style>\n" +
+			htmlContent[headEndIndex:]
+	}
+
+	return htmlContent, nil
+}
+
+// getCustomCoverageCSS returns CSS to style Go's HTML coverage report to match our dark theme
+func (td *TestDashboard) getCustomCoverageCSS() string {
+	return `
+/* Custom dark theme for Go coverage reports */
+body {
+    background-color: #1a1a1a !important;
+    color: #e0e0e0 !important;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+    margin: 0 !important;
+    padding: 20px !important;
+}
+
+/* Header styling */
+body > div:first-child, .header {
+    background: #2d2d2d !important;
+    padding: 1rem 2rem !important;
+    border-radius: 8px !important;
+    margin-bottom: 1rem !important;
+    border-left: 4px solid #4CAF50 !important;
+}
+
+/* File list styling */
+.file, .filelist {
+    background: #2d2d2d !important;
+    border-radius: 8px !important;
+    margin-bottom: 1rem !important;
+    overflow: hidden !important;
+}
+
+/* File name headers */
+.fname {
+    background: #3d3d3d !important;
+    color: #4CAF50 !important;
+    padding: 0.75rem 1rem !important;
+    font-weight: bold !important;
+    font-size: 1.1rem !important;
+    border-bottom: 1px solid #404040 !important;
+}
+
+/* Code content */
+pre {
+    background: #1a1a1a !important;
+    color: #e0e0e0 !important;
+    padding: 1rem !important;
+    margin: 0 !important;
+    font-family: 'Fira Code', 'Consolas', monospace !important;
+    font-size: 0.9rem !important;
+    line-height: 1.4 !important;
+    overflow-x: auto !important;
+}
+
+/* Coverage highlighting */
+.cov0 {
+    background-color: rgba(244, 67, 54, 0.3) !important;
+    color: #ffffff !important;
+}
+
+.cov1, .cov2, .cov3, .cov4, .cov5, .cov6, .cov7, .cov8, .cov9, .cov10 {
+    background-color: rgba(76, 175, 80, 0.3) !important;
+    color: #ffffff !important;
+}
+
+/* Links */
+a {
+    color: #4CAF50 !important;
+    text-decoration: none !important;
+}
+
+a:hover {
+    color: #45a049 !important;
+    text-decoration: underline !important;
+}
+
+/* Statistics and summary */
+table {
+    background: #2d2d2d !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    width: 100% !important;
+    margin-bottom: 1rem !important;
+}
+
+th {
+    background: #3d3d3d !important;
+    color: #4CAF50 !important;
+    padding: 0.75rem !important;
+    border-bottom: 1px solid #404040 !important;
+}
+
+td {
+    background: #2d2d2d !important;
+    color: #e0e0e0 !important;
+    padding: 0.5rem 0.75rem !important;
+    border-bottom: 1px solid #404040 !important;
+}
+
+tr:last-child td {
+    border-bottom: none !important;
+}
+
+/* Line numbers */
+.ln {
+    color: #666 !important;
+    user-select: none !important;
+    padding-right: 1em !important;
+}
+
+/* Make sure text is readable */
+.uncover {
+    background-color: rgba(244, 67, 54, 0.3) !important;
+    color: #ffffff !important;
+}
+
+/* Option/select elements */
+select, option {
+    background: #3d3d3d !important;
+    color: #e0e0e0 !important;
+    border: 1px solid #404040 !important;
+    border-radius: 4px !important;
+    padding: 0.5rem !important;
+}
+
+/* Navigation and controls */
+.nav, .navigation {
+    background: #2d2d2d !important;
+    padding: 1rem !important;
+    border-radius: 8px !important;
+    margin-bottom: 1rem !important;
+}
+
+/* Override any remaining light theme elements */
+* {
+    border-color: #404040 !important;
+}
+
+/* Scrollbar styling for webkit browsers */
+::-webkit-scrollbar {
+    width: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #404040;
+    border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+`
+}
+
 // Helper functions remain the same
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
@@ -432,4 +662,24 @@ func extractCoverage(output string) float64 {
 		}
 	}
 	return 0.0
+}
+
+// cleanupHTMLFiles periodically removes old HTML coverage files
+func (td *TestDashboard) cleanupHTMLFiles() {
+	ticker := time.NewTicker(10 * time.Minute) // Clean up every 10 minutes
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		for filename, expiry := range td.HTMLFiles {
+			if now.After(expiry) {
+				// Remove expired file
+				filePath := filepath.Join(td.ProjectPath, filename)
+				if err := os.Remove(filePath); err == nil {
+					log.Printf("Cleaned up expired HTML coverage file: %s", filename)
+				}
+				delete(td.HTMLFiles, filename)
+			}
+		}
+	}
 }

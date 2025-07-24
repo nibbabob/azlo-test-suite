@@ -232,11 +232,27 @@ body {
     cursor: pointer;
     font-size: 0.9rem;
     margin-top: 1rem;
+    margin-right: 1rem;
     transition: background 0.3s;
 }
 
 .coverage-link:hover {
     background: #45a049;
+}
+
+.coverage-link.html-coverage-link {
+    background: #2196F3;
+}
+
+.coverage-link.html-coverage-link:hover {
+    background: #1976D2;
+}
+
+.coverage-buttons {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
 }
 
 .last-run {
