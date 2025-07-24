@@ -26,6 +26,9 @@ function connectWebSocket() {
 }
 
 function updateDashboard(data) {
+    // Update project info
+    updateProjectInfo(data);
+
     // Update stats
     const overallCoverage = data.overall_coverage || 0;
     document.getElementById('overall-coverage').textContent = `${overallCoverage.toFixed(1)}%`;
@@ -50,6 +53,15 @@ function updateDashboard(data) {
         const lastRunEl = document.getElementById('last-run');
         const lastRun = new Date(data.last_run);
         lastRunEl.textContent = `Last run: ${lastRun.toLocaleTimeString()}`;
+    }
+}
+
+function updateProjectInfo(data) {
+    if (data.project_name) {
+        document.getElementById('project-name').textContent = data.project_name;
+    }
+    if (data.project_path) {
+        document.getElementById('project-path-text').textContent = data.project_path;
     }
 }
 
@@ -94,12 +106,131 @@ function createPackageHTML(result) {
         </div>`;
 }
 
+// --- PROJECT PATH SELECTION FUNCTIONS ---
+
+function showProjectModal() {
+    document.getElementById('project-modal').classList.add('show');
+    document.body.style.overflow = 'hidden';
+    loadCurrentProjectInfo();
+    checkFolderAPISupport();
+}
+
+function closeProjectModal() {
+    document.getElementById('project-modal').classList.remove('show');
+    document.body.style.overflow = '';
+}
+
+function checkFolderAPISupport() {
+    const browseButton = document.getElementById('folder-browse-button');
+    const supportNote = document.getElementById('browser-support-note');
+    
+    if ('showDirectoryPicker' in window) {
+        browseButton.disabled = false;
+        supportNote.style.display = 'none';
+    } else {
+        browseButton.disabled = true;
+        supportNote.style.display = 'block';
+    }
+}
+
+async function browseForFolder() {
+    try {
+        if ('showDirectoryPicker' in window) {
+            const dirHandle = await window.showDirectoryPicker();
+            // Note: We can't get the full path directly from the File System Access API
+            // for security reasons, so we'll use the directory name
+            const pathInput = document.getElementById('manual-path-input');
+            pathInput.value = `Selected: ${dirHandle.name}`;
+            alert('Folder selected! Please enter the full path manually in the text field below.');
+        }
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            console.error('Error selecting folder:', error);
+            alert('Error selecting folder. Please use manual path entry.');
+        }
+    }
+}
+
+async function setProjectPath() {
+    const pathInput = document.getElementById('manual-path-input');
+    const path = pathInput.value.trim();
+    
+    if (!path) {
+        alert('Please enter a project path');
+        return;
+    }
+
+    try {
+        const response = await fetch('/set-project-path', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ path: path })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            closeProjectModal();
+            // The WebSocket will automatically update the UI with new project info
+            setTimeout(() => {
+                alert('Project path updated successfully!');
+            }, 100);
+        } else {
+            alert(`Error: ${result.message}`);
+        }
+    } catch (error) {
+        console.error('Error setting project path:', error);
+        alert('Error setting project path. Please check the console for details.');
+    }
+}
+
+async function loadCurrentProjectInfo() {
+    try {
+        const response = await fetch('/project-info');
+        const info = await response.json();
+        
+        const infoContainer = document.getElementById('current-project-info');
+        
+        let packagesHtml = '';
+        if (info.packages && info.packages.length > 0) {
+            packagesHtml = `
+                <div class="project-info-item">
+                    <span class="project-info-label">Test Packages:</span>
+                    <span class="project-info-value">${info.packages_found}</span>
+                </div>
+                <div class="project-packages-list">
+                    ${info.packages.map(pkg => `<div class="project-package-item">${pkg}</div>`).join('')}
+                </div>
+            `;
+        }
+        
+        infoContainer.innerHTML = `
+            <div class="project-info-item">
+                <span class="project-info-label">Current Path:</span>
+                <span class="project-info-value">${info.project_path || 'Not set'}</span>
+            </div>
+            <div class="project-info-item">
+                <span class="project-info-label">Project Name:</span>
+                <span class="project-info-value">${info.project_name || 'Unknown'}</span>
+            </div>
+            ${packagesHtml}
+        `;
+    } catch (error) {
+        console.error('Error loading project info:', error);
+        document.getElementById('current-project-info').innerHTML = 
+            '<div class="loading">Error loading project information</div>';
+    }
+}
+
+// --- COVERAGE FUNCTIONS (unchanged) ---
+
 function showCoverage(packageName) {
     document.getElementById('coverage-package-name').textContent = `${packageName} Coverage`;
     document.getElementById('coverage-modal').classList.add('show');
-    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    document.body.style.overflow = 'hidden';
 
-    // Fetch coverage data
     fetch(`/coverage/${encodeURIComponent(packageName)}`)
         .then(response => {
             if (!response.ok) {
@@ -139,7 +270,6 @@ function displayCoverageFiles(files) {
         fileList.appendChild(fileItem);
     });
 
-    // Select first file by default
     if (files.length > 0) {
         fileList.firstChild.click();
     }
@@ -152,7 +282,6 @@ function selectFile(file, fileItem) {
 }
 
 function highlightGoSyntax(code) {
-    // Note: escapeHtml should be called *before* this function.
     return code
         .replace(/\b(package|import|func|var|const|type|struct|interface|if|else|for|range|switch|case|default|return|break|continue|go|defer|select|chan|map)\b/g, '<span class="go-keyword">$1</span>')
         .replace(/"([^"\\\\]|\\\\.)*"/g, '<span class="go-string">$&</span>')
@@ -203,7 +332,7 @@ function getFileName(fullPath) {
 
 function closeCoverage() {
     document.getElementById('coverage-modal').classList.remove('show');
-    document.body.style.overflow = ''; // Re-enable scrolling
+    document.body.style.overflow = '';
 }
 
 function togglePackage(header) {
@@ -224,28 +353,52 @@ function runTests() {
 
 // --- INITIALIZATION ---
 
-// Connect WebSocket on page load
 connectWebSocket();
 
-// Set up event listeners once the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     const runButton = document.getElementById('run-button');
-    const modal = document.getElementById('coverage-modal');
+    const projectButton = document.getElementById('project-button');
+    const folderBrowseButton = document.getElementById('folder-browse-button');
+    const setPathButton = document.getElementById('set-path-button');
+    const manualPathInput = document.getElementById('manual-path-input');
+    const projectModal = document.getElementById('project-modal');
+    const coverageModal = document.getElementById('coverage-modal');
 
-    // Run tests button
+    // Button event listeners
     runButton.addEventListener('click', runTests);
+    projectButton.addEventListener('click', showProjectModal);
+    folderBrowseButton.addEventListener('click', browseForFolder);
+    setPathButton.addEventListener('click', setProjectPath);
 
-    // Close modal when clicking outside the content
-    modal.addEventListener('click', function(event) {
-        if (event.target === modal) {
+    // Enter key support for manual path input
+    manualPathInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            setProjectPath();
+        }
+    });
+
+    // Modal close handlers
+    projectModal.addEventListener('click', (event) => {
+        if (event.target === projectModal) {
+            closeProjectModal();
+        }
+    });
+
+    coverageModal.addEventListener('click', (event) => {
+        if (event.target === coverageModal) {
             closeCoverage();
         }
     });
 
-    // Close modal with Escape key
-    document.addEventListener('keydown', function(event) {
+    // Escape key support
+    document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
-            closeCoverage();
+            if (projectModal.classList.contains('show')) {
+                closeProjectModal();
+            }
+            if (coverageModal.classList.contains('show')) {
+                closeCoverage();
+            }
         }
     });
 

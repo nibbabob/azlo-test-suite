@@ -7,11 +7,106 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="header">...</div>
-    <div class="stats" id="stats">...</div>
-    <div class="results" id="results">...</div>
-    <div class="last-run" id="last-run">...</div>
-    <div class="coverage-modal" id="coverage-modal">...</div>
+    <div class="header">
+        <div class="title">🧪 Go Test Dashboard</div>
+        <div class="header-actions">
+            <button class="project-button" id="project-button">📁 Select Project</button>
+            <button class="run-button" id="run-button">Run Tests</button>
+        </div>
+    </div>
+
+    <div class="project-info" id="project-info">
+        <div class="project-path">
+            <span class="project-label">Project:</span>
+            <span class="project-name" id="project-name">Loading...</span>
+            <span class="project-path-text" id="project-path-text"></span>
+        </div>
+    </div>
+
+    <div class="stats" id="stats">
+        <div class="stat-card">
+            <div class="stat-number" id="overall-coverage">0.0%</div>
+            <div class="stat-label">Overall Coverage</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="total-tests">0</div>
+            <div class="stat-label">Total Packages</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number passed" id="passed-tests">0</div>
+            <div class="stat-label">Passed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number failed" id="failed-tests">0</div>
+            <div class="stat-label">Failed</div>
+        </div>
+    </div>
+
+    <div class="results" id="results">
+        <div class="loading">Ready for testing...</div>
+    </div>
+
+    <div class="last-run" id="last-run">
+        <!-- Last run time will be populated by JavaScript -->
+    </div>
+
+    <!-- Project Selection Modal -->
+    <div class="project-modal" id="project-modal">
+        <div class="project-modal-content">
+            <div class="project-modal-header">
+                <div class="project-modal-title">Select Go Project</div>
+                <button class="close-project-modal" onclick="closeProjectModal()">✕ Close</button>
+            </div>
+            <div class="project-modal-body">
+                <div class="project-selection-methods">
+                    <div class="selection-method">
+                        <h3>📁 Browse for Folder</h3>
+                        <p>Click the button below to browse and select your Go project folder:</p>
+                        <button class="folder-browse-button" id="folder-browse-button">Browse Folder</button>
+                        <div class="browser-support-note" id="browser-support-note" style="display: none;">
+                            <small>⚠️ Your browser doesn't support folder selection. Please use manual path entry below.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="selection-method">
+                        <h3>✍️ Manual Path Entry</h3>
+                        <p>Enter the full path to your Go project directory:</p>
+                        <div class="path-input-group">
+                            <input type="text" id="manual-path-input" placeholder="e.g., /home/user/my-go-project or C:\Users\user\my-go-project" />
+                            <button class="set-path-button" id="set-path-button">Set Path</button>
+                        </div>
+                    </div>
+                    
+                    <div class="selection-method">
+                        <h3>🔍 Current Project Info</h3>
+                        <div class="current-project-info" id="current-project-info">
+                            <div class="loading">Loading project information...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Coverage Modal -->
+    <div class="coverage-modal" id="coverage-modal">
+        <div class="coverage-content">
+            <div class="coverage-header">
+                <div class="coverage-title" id="coverage-package-name">Package Coverage</div>
+                <button class="close-coverage" onclick="closeCoverage()">✕ Close</button>
+            </div>
+            <div class="coverage-files">
+                <div class="file-list" id="file-list">
+                    <div class="loading">Loading files...</div>
+                </div>
+                <div class="file-content">
+                    <div class="source-code" id="source-code">
+                        <div class="loading">Select a file to view coverage...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="/static/script.js"></script>
 </body>

@@ -1,4 +1,3 @@
-
 * {
     margin: 0;
     padding: 0;
@@ -27,7 +26,13 @@ body {
     color: #4CAF50;
 }
 
-.run-button {
+.header-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.run-button, .project-button {
     background: #4CAF50;
     color: white;
     border: none;
@@ -38,8 +43,45 @@ body {
     transition: background 0.3s;
 }
 
+.project-button {
+    background: #2196F3;
+}
+
 .run-button:hover {
     background: #45a049;
+}
+
+.project-button:hover {
+    background: #1976D2;
+}
+
+.project-info {
+    background: #333;
+    padding: 0.75rem 2rem;
+    border-bottom: 1px solid #404040;
+    font-size: 0.9rem;
+}
+
+.project-path {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.project-label {
+    color: #b0b0b0;
+    font-weight: bold;
+}
+
+.project-name {
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+.project-path-text {
+    color: #888;
+    font-family: monospace;
+    font-size: 0.85rem;
 }
 
 .stats {
@@ -122,6 +164,21 @@ body {
     font-weight: bold;
 }
 
+.coverage-badge.coverage-high {
+    background: #4CAF50;
+    color: white;
+}
+
+.coverage-badge.coverage-medium {
+    background: #FFC107;
+    color: black;
+}
+
+.coverage-badge.coverage-low {
+    background: #F44336;
+    color: white;
+}
+
 .status-badge {
     padding: 0.25rem 0.75rem;
     border-radius: 20px;
@@ -137,6 +194,11 @@ body {
 .status-badge.failed {
     background: #F44336;
     color: white;
+}
+
+.duration {
+    color: #b0b0b0;
+    font-size: 0.85rem;
 }
 
 .package-details {
@@ -162,13 +224,15 @@ body {
 }
 
 .coverage-link {
-    display: inline-block;
     background: #4CAF50;
     color: white;
+    border: none;
     padding: 0.5rem 1rem;
-    text-decoration: none;
     border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9rem;
     margin-top: 1rem;
+    transition: background 0.3s;
 }
 
 .coverage-link:hover {
@@ -179,7 +243,7 @@ body {
     text-align: center;
     color: #b0b0b0;
     font-size: 0.9rem;
-    margin-top: 1rem;
+    padding: 1rem;
 }
 
 .loading {
@@ -196,6 +260,184 @@ body {
 
 .loading {
     animation: pulse 2s infinite;
+}
+
+/* Project Selection Modal Styles */
+.project-modal {
+    display: none;
+    position: fixed;
+    z-index: 1001;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+}
+
+.project-modal.show {
+    display: block;
+}
+
+.project-modal-content {
+    background: #1a1a1a;
+    margin: 5% auto;
+    padding: 0;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 800px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh;
+}
+
+.project-modal-header {
+    background: #2d2d2d;
+    padding: 1rem 2rem;
+    border-bottom: 2px solid #2196F3;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.project-modal-title {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: #2196F3;
+}
+
+.close-project-modal {
+    background: #F44336;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.3s;
+}
+
+.close-project-modal:hover {
+    background: #d32f2f;
+}
+
+.project-modal-body {
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.project-selection-methods {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.selection-method {
+    background: #2d2d2d;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border-left: 4px solid #2196F3;
+}
+
+.selection-method h3 {
+    margin: 0 0 0.5rem 0;
+    color: #e0e0e0;
+    font-size: 1.1rem;
+}
+
+.selection-method p {
+    margin: 0 0 1rem 0;
+    color: #b0b0b0;
+    line-height: 1.4;
+}
+
+.folder-browse-button, .set-path-button {
+    background: #2196F3;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.3s;
+}
+
+.folder-browse-button:hover, .set-path-button:hover {
+    background: #1976D2;
+}
+
+.folder-browse-button:disabled {
+    background: #666;
+    cursor: not-allowed;
+}
+
+.path-input-group {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.path-input-group input {
+    flex: 1;
+    background: #1a1a1a;
+    border: 1px solid #404040;
+    border-radius: 5px;
+    padding: 0.75rem;
+    color: #e0e0e0;
+    font-size: 1rem;
+    font-family: monospace;
+}
+
+.path-input-group input:focus {
+    outline: none;
+    border-color: #2196F3;
+    box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+.browser-support-note {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid #FFC107;
+    border-radius: 5px;
+    color: #FFC107;
+}
+
+.current-project-info {
+    background: #1a1a1a;
+    padding: 1rem;
+    border-radius: 5px;
+    font-family: monospace;
+    font-size: 0.9rem;
+}
+
+.project-info-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+.project-info-label {
+    color: #b0b0b0;
+    font-weight: bold;
+}
+
+.project-info-value {
+    color: #e0e0e0;
+}
+
+.project-packages-list {
+    max-height: 150px;
+    overflow-y: auto;
+    margin-top: 0.5rem;
+}
+
+.project-package-item {
+    padding: 0.25rem 0;
+    color: #4CAF50;
+    font-size: 0.85rem;
 }
 
 /* Coverage Modal Styles */
@@ -250,6 +492,7 @@ body {
     border-radius: 5px;
     cursor: pointer;
     font-size: 1rem;
+    transition: background 0.3s;
 }
 
 .close-coverage:hover {

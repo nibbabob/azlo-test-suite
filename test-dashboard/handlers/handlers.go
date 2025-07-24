@@ -15,6 +15,18 @@ type Handler struct {
 	Dashboard *dashboard.TestDashboard
 }
 
+// ProjectPathRequest represents the request body for setting project path
+type ProjectPathRequest struct {
+	Path string `json:"path"`
+}
+
+// ProjectPathResponse represents the response for project path operations
+type ProjectPathResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Path    string `json:"path,omitempty"`
+}
+
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := h.Dashboard.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -26,6 +38,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	h.Dashboard.Clients[conn] = true
 	defer delete(h.Dashboard.Clients, conn)
 
+	// Send current data to new client
 	conn.WriteJSON(h.Dashboard.Data)
 
 	for {
@@ -53,4 +66,45 @@ func (h *Handler) ServeCoverageData(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Error(w, "Package not found", http.StatusNotFound)
+}
+
+// HandleSetProjectPath sets the project root directory
+func (h *Handler) HandleSetProjectPath(w http.ResponseWriter, r *http.Request) {
+	var req ProjectPathRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Path == "" {
+		http.Error(w, "Path is required", http.StatusBadRequest)
+		return
+	}
+
+	err := h.Dashboard.SetProjectPath(req.Path)
+	w.Header().Set("Content-Type", "application/json")
+
+	if err != nil {
+		response := ProjectPathResponse{
+			Success: false,
+			Message: err.Error(),
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response := ProjectPathResponse{
+		Success: true,
+		Message: "Project path updated successfully",
+		Path:    req.Path,
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleGetProjectInfo returns current project information
+func (h *Handler) HandleGetProjectInfo(w http.ResponseWriter, r *http.Request) {
+	info := h.Dashboard.GetProjectInfo()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(info)
 }

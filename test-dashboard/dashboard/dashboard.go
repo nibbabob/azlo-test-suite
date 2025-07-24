@@ -48,21 +48,32 @@ type DashboardData struct {
 	TotalTests      int          `json:"total_tests"`
 	PassedTests     int          `json:"passed_tests"`
 	LastRun         time.Time    `json:"last_run"`
+	ProjectPath     string       `json:"project_path"` // New field
+	ProjectName     string       `json:"project_name"` // New field
 }
 
 // --- Core Dashboard Component ---
 
 type TestDashboard struct {
-	Data      DashboardData
-	Clients   map[*websocket.Conn]bool
-	Broadcast chan DashboardData
-	Upgrader  websocket.Upgrader
+	Data        DashboardData
+	Clients     map[*websocket.Conn]bool
+	Broadcast   chan DashboardData
+	Upgrader    websocket.Upgrader
+	ProjectPath string // Current project path
 }
 
 func NewTestDashboard() *TestDashboard {
+	// Default to current directory
+	currentDir, _ := os.Getwd()
+
 	return &TestDashboard{
-		Clients:   make(map[*websocket.Conn]bool),
-		Broadcast: make(chan DashboardData),
+		Clients:     make(map[*websocket.Conn]bool),
+		Broadcast:   make(chan DashboardData),
+		ProjectPath: currentDir,
+		Data: DashboardData{
+			ProjectPath: currentDir,
+			ProjectName: filepath.Base(currentDir),
+		},
 		Upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				return true // Allow all origins for development
@@ -72,6 +83,46 @@ func NewTestDashboard() *TestDashboard {
 }
 
 // --- Exported Methods (for use by handlers/main) ---
+
+// SetProjectPath changes the project root directory
+func (td *TestDashboard) SetProjectPath(path string) error {
+	// Validate that the path exists and is a directory
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("path does not exist: %v", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("path is not a directory")
+	}
+
+	// Check if it's a Go project (has go.mod or *.go files)
+	if !td.isGoProject(path) {
+		return fmt.Errorf("directory does not appear to be a Go project (no go.mod or *.go files found)")
+	}
+
+	td.ProjectPath = path
+	td.Data.ProjectPath = path
+	td.Data.ProjectName = filepath.Base(path)
+
+	log.Printf("Project path changed to: %s", path)
+
+	// Broadcast updated project info to all clients
+	td.Broadcast <- td.Data
+
+	return nil
+}
+
+// GetProjectInfo returns current project information
+func (td *TestDashboard) GetProjectInfo() map[string]interface{} {
+	packages, _ := td.findGoPackages(td.ProjectPath)
+
+	return map[string]interface{}{
+		"project_path":   td.ProjectPath,
+		"project_name":   td.Data.ProjectName,
+		"packages_found": len(packages),
+		"packages":       packages,
+	}
+}
 
 // BroadcastUpdates sends dashboard data to all connected WebSocket clients.
 func (td *TestDashboard) BroadcastUpdates() {
@@ -89,11 +140,27 @@ func (td *TestDashboard) BroadcastUpdates() {
 
 // RunTests discovers all Go packages with tests and executes them.
 func (td *TestDashboard) RunTests() {
-	log.Println("Running tests...")
+	log.Printf("Running tests in project: %s", td.ProjectPath)
 
-	packages, err := findGoPackages(".")
+	packages, err := td.findGoPackages(td.ProjectPath)
 	if err != nil {
 		log.Printf("Error finding packages: %v", err)
+		return
+	}
+
+	if len(packages) == 0 {
+		log.Printf("No test packages found in %s", td.ProjectPath)
+		// Still broadcast an update with zero results
+		dashboardData := DashboardData{
+			Results:         []TestResult{},
+			OverallCoverage: 0.0,
+			TotalTests:      0,
+			PassedTests:     0,
+			LastRun:         time.Now(),
+			ProjectPath:     td.ProjectPath,
+			ProjectName:     td.Data.ProjectName,
+		}
+		td.Broadcast <- dashboardData
 		return
 	}
 
@@ -121,34 +188,103 @@ func (td *TestDashboard) RunTests() {
 		TotalTests:      len(packages),
 		PassedTests:     passedTests,
 		LastRun:         time.Now(),
+		ProjectPath:     td.ProjectPath,
+		ProjectName:     td.Data.ProjectName,
 	}
 
 	td.Broadcast <- dashboardData
-	log.Println("Test run complete.")
+	log.Printf("Test run complete. Found %d packages, %d passed", len(packages), passedTests)
 }
 
 // --- Internal Helper Functions (unexported) ---
 
+// isGoProject checks if a directory contains Go project files
+func (td *TestDashboard) isGoProject(path string) bool {
+	// Check for go.mod file
+	if _, err := os.Stat(filepath.Join(path, "go.mod")); err == nil {
+		return true
+	}
+
+	// Check for any .go files in the directory or subdirectories
+	hasGoFiles := false
+	filepath.WalkDir(path, func(filePath string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			// Skip common non-source directories
+			if d.Name() == "vendor" || d.Name() == ".git" || d.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(filePath, ".go") {
+			hasGoFiles = true
+			return fmt.Errorf("found go files") // Use error to break out of walk
+		}
+		return nil
+	})
+
+	return hasGoFiles
+}
+
 // runPackageTests executes tests for a single package.
 func (td *TestDashboard) runPackageTests(pkg string) TestResult {
 	start := time.Now()
-	coverProfile := fmt.Sprintf("coverage_%s.out", strings.ReplaceAll(pkg, "/", "_"))
+
+	// Create a unique coverage profile name
+	coverProfile := fmt.Sprintf("coverage_%s_%d.out",
+		strings.ReplaceAll(strings.ReplaceAll(pkg, "/", "_"), string(filepath.Separator), "_"),
+		time.Now().UnixNano())
+
 	defer os.Remove(coverProfile)
 
-	cmd := exec.Command("go", "test", "-coverprofile="+coverProfile, "./"+pkg)
-	output, err := cmd.CombinedOutput()
+	// Change to project directory and run tests
+	originalDir, _ := os.Getwd()
+	defer os.Chdir(originalDir)
+
+	err := os.Chdir(td.ProjectPath)
+	if err != nil {
+		return TestResult{
+			Package:   pkg,
+			Passed:    false,
+			Output:    fmt.Sprintf("Error changing to project directory: %v", err),
+			Duration:  time.Since(start),
+			Timestamp: time.Now(),
+		}
+	}
+
+	// Convert absolute package path to relative path from project root
+	relPkg, err := filepath.Rel(td.ProjectPath, pkg)
+	if err != nil {
+		relPkg = pkg
+	}
+
+	// Ensure we use forward slashes for go command (works on Windows too)
+	relPkg = filepath.ToSlash(relPkg)
+	if relPkg == "." {
+		relPkg = "./"
+	} else if !strings.HasPrefix(relPkg, "./") {
+		relPkg = "./" + relPkg
+	}
+
+	cmd := exec.Command("go", "test", "-coverprofile="+coverProfile, relPkg)
+	cmd.Dir = td.ProjectPath // Ensure command runs in project directory
+	output, testErr := cmd.CombinedOutput()
 
 	result := TestResult{
-		Package:   pkg,
-		Passed:    err == nil,
+		Package:   relPkg,
+		Passed:    testErr == nil,
 		Output:    string(output),
 		Duration:  time.Since(start),
 		Timestamp: time.Now(),
 	}
 
-	if fileExists(coverProfile) {
+	// Check if coverage file was created and parse it
+	coveragePath := filepath.Join(td.ProjectPath, coverProfile)
+	if fileExists(coveragePath) {
 		result.Coverage = extractCoverage(string(output))
-		result.Files = td.parseCoverageProfile(coverProfile, pkg)
+		result.Files = td.parseCoverageProfile(coveragePath, pkg)
 	}
 
 	return result
@@ -210,11 +346,18 @@ func (td *TestDashboard) parseCoverageProfile(profilePath string, _ string) []Fi
 
 	var files []FileCoverage
 	for filename, blocks := range fileMap {
-		content, err := os.ReadFile(filename)
+		// Try to read file relative to project path
+		fullPath := filename
+		if !filepath.IsAbs(filename) {
+			fullPath = filepath.Join(td.ProjectPath, filename)
+		}
+
+		content, err := os.ReadFile(fullPath)
 		if err != nil {
-			log.Printf("Error reading file %s: %v", filename, err)
+			log.Printf("Error reading file %s: %v", fullPath, err)
 			continue
 		}
+
 		files = append(files, FileCoverage{
 			Filename: filename,
 			Content:  string(content),
@@ -225,6 +368,36 @@ func (td *TestDashboard) parseCoverageProfile(profilePath string, _ string) []Fi
 	return files
 }
 
+// findGoPackages discovers all directories containing Go test files
+func (td *TestDashboard) findGoPackages(root string) ([]string, error) {
+	var packages []string
+	uniquePackages := make(map[string]bool)
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			// Skip common directories that shouldn't contain tests
+			if d.Name() == "vendor" || d.Name() == ".git" || d.Name() == "node_modules" || d.Name() == ".vscode" || d.Name() == ".idea" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, "_test.go") {
+			dir := filepath.Dir(path)
+			if !uniquePackages[dir] {
+				uniquePackages[dir] = true
+				packages = append(packages, dir)
+			}
+		}
+		return nil
+	})
+
+	return packages, err
+}
+
+// Helper functions remain the same
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	return err == nil
@@ -259,31 +432,4 @@ func extractCoverage(output string) float64 {
 		}
 	}
 	return 0.0
-}
-
-func findGoPackages(root string) ([]string, error) {
-	var packages []string
-	uniquePackages := make(map[string]bool)
-
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			if d.Name() == "vendor" || d.Name() == ".git" || d.Name() == "static" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if strings.HasSuffix(path, "_test.go") {
-			dir := filepath.Dir(path)
-			if !uniquePackages[dir] {
-				uniquePackages[dir] = true
-				packages = append(packages, dir)
-			}
-		}
-		return nil
-	})
-
-	return packages, err
 }

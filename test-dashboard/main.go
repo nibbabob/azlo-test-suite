@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	"azlo-test-suite/dashboard" // <-- Replace
-	"azlo-test-suite/handlers"  // <-- Replace
+	"azlo-test-suite/dashboard"
+	"azlo-test-suite/handlers"
 
 	"github.com/gorilla/mux"
 )
@@ -28,6 +28,10 @@ func main() {
 	r.HandleFunc("/run-tests", h.HandleRunTests).Methods("POST")
 	r.HandleFunc("/coverage/{package}", h.ServeCoverageData)
 
+	// New project path management routes
+	r.HandleFunc("/set-project-path", h.HandleSetProjectPath).Methods("POST")
+	r.HandleFunc("/project-info", h.HandleGetProjectInfo).Methods("GET")
+
 	// Static file server for frontend assets
 	staticFileServer := http.FileServer(http.Dir("./static/"))
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", staticFileServer))
@@ -44,5 +48,6 @@ func main() {
 	}
 
 	fmt.Printf("🧪 Go Test Dashboard starting on http://localhost:%s\n", port)
+	fmt.Printf("📊 Open in your browser to see live test results and coverage\n")
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }
