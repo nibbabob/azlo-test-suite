@@ -9,6 +9,16 @@
     --text-white: #f8fafc;
     --accent: #f59e0b;
     --error: #ef4444;
+
+    /* New Syntax Highlighting Colors */
+    --syntax-keyword: #c586c0; /* Magenta for keywords */
+    --syntax-string: #ce9178;  /* Orange for strings */
+    --syntax-comment: #6a9955; /* Green for comments */
+    --syntax-number: #b5cea8;  /* Light green for numbers */
+    --syntax-function: #dcdcaa;/* Yellow for function calls */
+    --syntax-type: #4ec9b0;    /* Teal for types */
+    --syntax-builtin: #569cd6;  /* Blue for built-ins */
+    --syntax-default: #d4d4d4; /* Default text color */
 }
 
 * {
@@ -415,9 +425,12 @@ body {
 .code-line.covered .line-number { background-color: var(--primary); color: white; }
 .code-line.uncovered .line-number { background-color: var(--error); color: white; }
 
-/* Go syntax highlighting (Adjusted to brand colors) */
-.go-keyword { color: var(--primary); }
-.go-string { color: var(--secondary); }
-.go-comment { color: #94a3b8; font-style: italic; }
-.go-number { color: #a5b4fc; }
-.go-function { color: #e2e8f0; }
+/* === UPGRADED GO SYNTAX HIGHLIGHTING === */
+.line-content { color: var(--syntax-default); }
+.go-keyword { color: var(--syntax-keyword); }
+.go-string { color: var(--syntax-string); }
+.go-comment { color: var(--syntax-comment); font-style: italic; }
+.go-number { color: var(--syntax-number); }
+.go-function { color: var(--syntax-function); }
+.go-type { color: var(--syntax-type); }
+.go-builtin { color: var(--syntax-builtin); }

@@ -1,0 +1,92 @@
+name: Release and Build
+
+# This workflow runs on every push to the main branch
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Check out the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Set up the Go environment
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24' # Matches the version in your README
+
+      # 3. Tidy Go modules
+      # Ensures all dependencies are correctly downloaded and listed
+      - name: Go Mod Tidy
+        run: go mod tidy
+
+      # 4. Run tests
+      # This ensures the build is stable before releasing
+      - name: Run Go Tests
+        run: go test -v ./...
+
+      # 5. Create a new version tag (e.g., v1.0.1, v1.0.2)
+      # This action automatically finds the latest tag and bumps the patch version
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          
+      # 6. Build the application for multiple platforms
+      # The output binaries will be named 'azlo-dashboard-os-arch'
+      - name: Build Application
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o azlo-dashboard-linux-amd64 main.go
+          GOOS=windows GOARCH=amd64 go build -o azlo-dashboard-windows-amd64.exe main.go
+          GOOS=darwin GOARCH=amd64 go build -o azlo-dashboard-darwin-amd64 main.go
+
+      # 7. Create a GitHub Release
+      # This creates a new release with the tag from step 5 and attaches the built files from step 6.
+      - name: Create Release
+        id: create-release # <-- FIX: This ID was missing
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ steps.tag_version.outputs.new_tag }}
+          release_name: Release ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      # 8. Upload build artifacts to the release
+      # Makes the compiled executables available for download from the release page
+      - name: Upload Linux Artifact
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: ./azlo-dashboard-linux-amd64
+          asset_name: azlo-dashboard-linux-amd64
+          asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Upload Windows Artifact
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: ./azlo-dashboard-windows-amd64.exe
+          asset_name: azlo-dashboard-windows-amd64.exe
+          asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Darwin (macOS) Artifact
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: ./azlo-dashboard-darwin-amd64
+          asset_name: azlo-dashboard-darwin-amd64
+          asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
