@@ -1,6 +1,5 @@
 name: Release and Build
 
-# This workflow runs on every push to the main branch
 on:
   push:
     branches: [ main ]
@@ -8,6 +7,11 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./test-dashboard # Default for all run steps
+
     steps:
       # 1. Check out the repository code
       - name: Checkout code
@@ -19,36 +23,37 @@ jobs:
         with:
           go-version: '1.24'
 
-      # 3. Cache Go modules to speed up future builds
+      # 3. Cache Go modules
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          # Correct path to the go.sum file inside the test-dashboard directory
+          path: test-dashboard/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/test-dashboard/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
 
-      # 4. Ensure all dependencies are correct and downloaded
+      # 4. Install Dependencies
       - name: Install Dependencies
         run: go mod tidy
 
-      # 5. Run tests to ensure stability
+      # 5. Run Go Tests
       - name: Run Go Tests
         run: go test -v ./...
 
-      # 6. Create a new version tag (e.g., v1.0.1)
+      # 6. Bump version and push tag
       - name: Bump version and push tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           
-      # 7. Build the application for multiple platforms
+      # 7. Build the application
       - name: Build Application
         run: |
-          go build -o azlo-dashboard-linux-amd64 ./test-dashboard
-          go build -o azlo-dashboard-windows-amd64.exe ./test-dashboard
-          go build -o azlo-dashboard-darwin-amd64 ./test-dashboard
+          go build -v -o ../azlo-dashboard-linux-amd64 .
+          go build -v -o ../azlo-dashboard-windows-amd64.exe .
+          go build -v -o ../azlo-dashboard-darwin-amd64 .
 
       # 8. Create a GitHub Release
       - name: Create Release
@@ -65,9 +70,9 @@ jobs:
       - name: Upload Build Artifacts
         uses: actions/upload-release-asset@v1
         with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ./azlo-dashboard-*
-          asset_name: azlo-dashboard-${{ matrix.os }}-${{ matrix.arch }}
+          upload_url: ${{ steps.create-release.outputs.upload_url }} 
+          asset_path: ./azlo-dashboard-* # Artifacts are now in the root
+          asset_name: azlo-dashboard-${{ runner.os }}
           asset_content_type: application/octet-stream
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
