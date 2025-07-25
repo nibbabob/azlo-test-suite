@@ -1,16 +1,23 @@
 package main
 
 import (
+	"bytes" // Import the bytes package
+	"embed"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"time" // Import the time package
 
-	"azlo-test-suite/dashboard" // <-- Replace
-	"azlo-test-suite/handlers"  // <-- Replace
+	"azlo-test-suite/dashboard" // <-- Replace with your module path
+	"azlo-test-suite/handlers"  // <-- Replace with your module path
 
 	"github.com/gorilla/mux"
 )
+
+//go:embed static/*
+var staticFiles embed.FS
 
 func main() {
 	// 1. Initialize the core application
@@ -33,13 +40,32 @@ func main() {
 	r.HandleFunc("/set-project-path", h.HandleSetProjectPath).Methods("POST")
 	r.HandleFunc("/project-info", h.HandleGetProjectInfo).Methods("GET")
 
-	// Static file server for frontend assets
-	staticFileServer := http.FileServer(http.Dir("./static/"))
+	// Create a sub-filesystem for the static directory
+	staticFS, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Static file server for frontend assets from embedded files
+	staticFileServer := http.FileServer(http.FS(staticFS))
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", staticFileServer))
 
-	// Root handler to serve the index.html
+	// Root handler to serve the index.html from embedded files
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "static/index.html")
+		// ---- CHANGE: Read the file into a byte slice first ----
+		indexHTML, err := fs.ReadFile(staticFS, "index.html")
+		if err != nil {
+			log.Printf("Error reading embedded index.html: %v", err)
+			http.Error(w, "index.html not found", http.StatusInternalServerError)
+			return
+		}
+
+		// ---- CHANGE: Create a bytes.Reader, which implements io.ReadSeeker ----
+		reader := bytes.NewReader(indexHTML)
+
+		// ---- CHANGE: Serve the content using the new reader ----
+		// We pass a zero Time value for modtime as it's not essential here.
+		http.ServeContent(w, r, "index.html", time.Time{}, reader)
 	})
 
 	// 4. Start the server

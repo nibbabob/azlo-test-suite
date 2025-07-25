@@ -42,11 +42,21 @@ function updateDashboard(data) {
 
     // Update results
     const resultsEl = document.getElementById('results');
+
+    // This new logic handles the live updates gracefully.
     if (data.results && data.results.length > 0) {
+        // If we have results, display them. This will happen for every package update.
         resultsEl.innerHTML = data.results.map(result => createPackageHTML(result)).join('');
+        delete resultsEl.dataset.isRunning; // A run with results is no longer in the "initial" state
+    } else if (data.results && resultsEl.dataset.isRunning === "true") {
+        // This handles the very first message of a test run, which has 0 results.
+        // We clear the "Running tests..." message to make way for the incoming package results.
+        resultsEl.innerHTML = '';
     } else if (data.results) {
+        // This handles the case where there are no results and a test is NOT running.
         resultsEl.innerHTML = '<div class="loading">No test results yet. Click "Run Tests".</div>';
     }
+
 
     // Update last run time
     if (data.last_run) {
@@ -117,43 +127,11 @@ function showProjectModal() {
     document.getElementById('project-modal').classList.add('show');
     document.body.style.overflow = 'hidden';
     loadCurrentProjectInfo();
-    checkFolderAPISupport();
 }
 
 function closeProjectModal() {
     document.getElementById('project-modal').classList.remove('show');
     document.body.style.overflow = '';
-}
-
-function checkFolderAPISupport() {
-    const browseButton = document.getElementById('folder-browse-button');
-    const supportNote = document.getElementById('browser-support-note');
-    
-    if ('showDirectoryPicker' in window) {
-        browseButton.disabled = false;
-        supportNote.style.display = 'none';
-    } else {
-        browseButton.disabled = true;
-        supportNote.style.display = 'block';
-    }
-}
-
-async function browseForFolder() {
-    try {
-        if ('showDirectoryPicker' in window) {
-            const dirHandle = await window.showDirectoryPicker();
-            // Note: We can't get the full path directly from the File System Access API
-            // for security reasons, so we'll use the directory name
-            const pathInput = document.getElementById('manual-path-input');
-            pathInput.value = `Selected: ${dirHandle.name}`;
-            alert('Folder selected! Please enter the full path manually in the text field below.');
-        }
-    } catch (error) {
-        if (error.name !== 'AbortError') {
-            console.error('Error selecting folder:', error);
-            alert('Error selecting folder. Please use manual path entry.');
-        }
-    }
 }
 
 async function setProjectPath() {
@@ -357,13 +335,17 @@ function togglePackage(header) {
 }
 
 function runTests() {
+    const resultsEl = document.getElementById('results');
+    // Set a "running" state on the results element itself.
+    resultsEl.innerHTML = '<div class="loading">Running tests...</div>';
+    resultsEl.dataset.isRunning = "true";
+
     fetch('/run-tests', { method: 'POST' })
-        .then(() => {
-            document.getElementById('results').innerHTML = '<div class="loading">Running tests...</div>';
-        })
         .catch(error => {
             console.error('Error running tests:', error);
-            document.getElementById('results').innerHTML = '<div class="loading">Failed to start tests.</div>';
+            resultsEl.innerHTML = '<div class="loading">Failed to start tests.</div>';
+            // Clean up the state attribute on failure.
+            delete resultsEl.dataset.isRunning;
         });
 }
 
@@ -374,7 +356,6 @@ connectWebSocket();
 document.addEventListener('DOMContentLoaded', () => {
     const runButton = document.getElementById('run-button');
     const projectButton = document.getElementById('project-button');
-    const folderBrowseButton = document.getElementById('folder-browse-button');
     const setPathButton = document.getElementById('set-path-button');
     const manualPathInput = document.getElementById('manual-path-input');
     const projectModal = document.getElementById('project-modal');
@@ -383,7 +364,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Button event listeners
     runButton.addEventListener('click', runTests);
     projectButton.addEventListener('click', showProjectModal);
-    folderBrowseButton.addEventListener('click', browseForFolder);
     setPathButton.addEventListener('click', setProjectPath);
 
     // Enter key support for manual path input
