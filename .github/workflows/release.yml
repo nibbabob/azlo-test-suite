@@ -21,25 +21,23 @@ jobs:
         with:
           go-version: '1.24'
 
-      # 3. FIX: Use a wildcard to robustly find the go.sum for caching
+      # 3. Cache Go modules
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }} # Use wildcard to find go.sum
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
 
       # 4. Install Dependencies, Tidy, and Test
       - name: Install Dependencies, Tidy, and Test
-        working-directory: ./test-dashboard # Run from the subdirectory
+        working-directory: ./test-dashboard
         run: |
           go mod tidy
           go test -v ./...
 
       # 5. Bump version and push tag
-      # Note: This action may still show a deprecation warning until the author updates it.
-      # This is the last remaining source of the warnings.
       - name: Bump version and push tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.2
@@ -48,25 +46,27 @@ jobs:
           
       # 6. Build the application
       - name: Build Application
-        working-directory: ./test-dashboard # Run from the subdirectory
+        working-directory: ./test-dashboard
         run: |
-          go build -v -o ../azlo-dashboard-linux-amd64 .
-          go build -v -o ../azlo-dashboard-windows-amd64.exe .
-          go build -v -o ../azlo-dashboard-darwin-amd64 .
+          # Build for Linux (amd64)
+          GOOS=linux GOARCH=amd64 go build -v -o ../azlo-dashboard-linux-amd64 .
+          
+          # Build for Windows (amd64)
+          GOOS=windows GOARCH=amd64 go build -v -o ../azlo-dashboard-windows-amd64.exe .
+          
+          # Build for macOS (amd64)
+          GOOS=darwin GOARCH=amd64 go build -v -o ../azlo-dashboard-darwin-amd64 .
 
-      # 7. FIX: Create Release and Upload Assets with a single, modern action
-      # This replaces the old create-release and upload-release-asset steps
+      # 7. Create Release and Upload Assets
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
-          # Use the tag created in the previous step
           tag_name: ${{ steps.tag_version.outputs.new_tag }}
-          # Use the changelog from the tag action for the release body
           body: ${{ steps.tag_version.outputs.changelog }}
-          # Tell the action where to find the files to upload
+          # The list of files to upload reflects the standard build output
           files: |
             ./azlo-dashboard-linux-amd64
-            ./azlo-dashboard-windows-amd64.exe
+            ./azlo-dashboard-windows-amd64.exe 
             ./azlo-dashboard-darwin-amd64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
