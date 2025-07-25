@@ -8,7 +8,6 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     
-    # FIX 1: Grant permissions for the job to create releases and tags.
     permissions:
       contents: write
 
@@ -23,42 +22,40 @@ jobs:
         with:
           go-version: '1.24'
 
-      # 3. Cache Go modules
+      # 3. Cache Go modules - this part was correct!
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
-          # FIX 2: Explicitly point to the go.sum in its subdirectory
+          # This key correctly points to the go.sum in the subdirectory
           key: ${{ runner.os }}-go-${{ hashFiles('test-dashboard/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
 
-      # 4. Install Dependencies and Run Tests from the root
-      # No more 'working-directory'. We just tell Go where the project is.
-      - name: Run Tests and Tidy Modules
+      # 4. FIX: Run Go commands from the correct directory.
+      # This is the main change. By setting the working-directory,
+      # we ensure that 'go test' and 'go mod tidy' run where the go.mod file is.
+      - name: Install Dependencies, Tidy, and Test
+        working-directory: ./test-dashboard
         run: |
-          go work init ./test-dashboard
-          go work sync
-          go test -v ./...
           go mod tidy
+          go test -v ./...
 
-      # 5. Bump version and push tag
+      # 5. Bump version and push tag (no changes here)
       - name: Bump version and push tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           
-      # 6. Build the application
+      # 6. Build the application (no changes here)
       - name: Build Application
         run: |
-          # Build from the root, telling it which package to build.
-          # The output files will be created in the root.
           go build -v -o azlo-dashboard-linux-amd64 ./test-dashboard
           go build -v -o azlo-dashboard-windows-amd64.exe ./test-dashboard
           go build -v -o azlo-dashboard-darwin-amd64 ./test-dashboard
 
-      # 7. Create a GitHub Release
+      # 7. Create a GitHub Release (no changes here)
       - name: Create Release
         id: create-release
         uses: actions/create-release@v1
@@ -69,7 +66,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
-      # 8. Upload Build Artifacts
+      # 8. Upload Build Artifacts (no changes here)
       - name: Upload Build Artifacts
         uses: actions/upload-release-asset@v1
         with:
