@@ -6,7 +6,7 @@ function connectWebSocket() {
 
     ws.onopen = function() {
         console.log('WebSocket connected');
-        document.getElementById('results').innerHTML = '<div class="loading">Welcome! Please select a project to begin testing.</div>';
+        document.getElementById('results').innerHTML = '<div class="loading">Ready for testing...</div>';
     };
 
     ws.onmessage = function(event) {
@@ -26,43 +26,39 @@ function connectWebSocket() {
 }
 
 function updateDashboard(data) {
+    // Update project info
     updateProjectInfo(data);
 
+    // Update stats
     const overallCoverage = data.overall_coverage || 0;
     document.getElementById('overall-coverage').textContent = `${overallCoverage.toFixed(1)}%`;
     document.getElementById('total-tests').textContent = data.total_tests || 0;
     document.getElementById('passed-tests').textContent = data.passed_tests || 0;
     document.getElementById('failed-tests').textContent = (data.total_tests || 0) - (data.passed_tests || 0);
 
+    // Update coverage color
     const coverageEl = document.getElementById('overall-coverage');
     coverageEl.className = `stat-number ${getCoverageClass(overallCoverage)}`;
 
+    // Update results
     const resultsEl = document.getElementById('results');
 
-    // --- MODIFIED: Remember expanded packages ---
-    const expandedPackages = new Set();
-    document.querySelectorAll('.package-details.expanded').forEach(details => {
-        const packageName = details.parentElement.querySelector('.package-name').textContent;
-        expandedPackages.add(packageName);
-    });
-
-
-    if (data.message) {
-        resultsEl.innerHTML = `<div class="loading">${escapeHtml(data.message)}</div>`;
-        return;
-    }
-
-    if (data.pending_packages && data.pending_packages.length > 0 && (!data.results || data.results.length === 0)) {
-        resultsEl.innerHTML = data.pending_packages.map(pkg => createPendingPackageHTML(pkg)).join('');
-        return;
-    }
-
+    // This new logic handles the live updates gracefully.
     if (data.results && data.results.length > 0) {
-        resultsEl.innerHTML = data.results.map(result => createPackageHTML(result, expandedPackages)).join('');
+        // If we have results, display them. This will happen for every package update.
+        resultsEl.innerHTML = data.results.map(result => createPackageHTML(result)).join('');
+        delete resultsEl.dataset.isRunning; // A run with results is no longer in the "initial" state
+    } else if (data.results && resultsEl.dataset.isRunning === "true") {
+        // This handles the very first message of a test run, which has 0 results.
+        // We clear the "Running tests..." message to make way for the incoming package results.
+        resultsEl.innerHTML = '';
     } else if (data.results) {
+        // This handles the case where there are no results and a test is NOT running.
         resultsEl.innerHTML = '<div class="loading">No test results yet. Click "Run Tests".</div>';
     }
 
+
+    // Update last run time
     if (data.last_run) {
         const lastRunEl = document.getElementById('last-run');
         const lastRun = new Date(data.last_run);
@@ -94,22 +90,7 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-function createPendingPackageHTML(packageName) {
-    return `
-        <div class="package-result pending">
-            <div class="package-header">
-                <div class="package-name">${escapeHtml(packageName)}</div>
-                <div class="package-stats">
-                    <div class="coverage-badge">-.--%</div>
-                    <div class="status-badge pending">PENDING</div>
-                    <div class="duration">---ms</div>
-                </div>
-            </div>
-        </div>`;
-}
-
-// --- MODIFIED: Accept expandedPackages set to restore state ---
-function createPackageHTML(result, expandedPackages = new Set()) {
+function createPackageHTML(result) {
     const statusClass = result.passed ? 'passed' : 'failed';
     const statusText = result.passed ? 'PASSED' : 'FAILED';
     const coverageClass = getCoverageClass(result.coverage || 0);
@@ -122,10 +103,6 @@ function createPackageHTML(result, expandedPackages = new Set()) {
     if (result.html_coverage_file) {
         coverageButtons += `<button class="coverage-link html-coverage-link" onclick="event.stopPropagation(); openHTMLCoverage('${escapeHtml(result.html_coverage_file || '')}')">📋 HTML Report</button>`;
     }
-    
-    // --- MODIFIED: Check if this package should be expanded ---
-    const isExpanded = expandedPackages.has(result.package);
-    const expandedClass = isExpanded ? 'expanded' : '';
 
     return `
         <div class="package-result ${statusClass}">
@@ -137,12 +114,14 @@ function createPackageHTML(result, expandedPackages = new Set()) {
                     <div class="duration">${duration}ms</div>
                 </div>
             </div>
-            <div class="package-details ${expandedClass}">
+            <div class="package-details">
                 <div class="test-output">${escapeHtml(result.output || '')}</div>
                 <div class="coverage-buttons">${coverageButtons}</div>
             </div>
         </div>`;
 }
+
+// --- PROJECT PATH SELECTION FUNCTIONS ---
 
 function showProjectModal() {
     document.getElementById('project-modal').classList.add('show');
@@ -158,7 +137,7 @@ function closeProjectModal() {
 async function setProjectPath() {
     const pathInput = document.getElementById('manual-path-input');
     const path = pathInput.value.trim();
-
+    
     if (!path) {
         alert('Please enter a project path');
         return;
@@ -174,9 +153,10 @@ async function setProjectPath() {
         });
 
         const result = await response.json();
-
+        
         if (result.success) {
             closeProjectModal();
+            // The WebSocket will automatically update the UI with new project info
             setTimeout(() => {
                 alert('Project path updated successfully!');
             }, 100);
@@ -193,9 +173,9 @@ async function loadCurrentProjectInfo() {
     try {
         const response = await fetch('/project-info');
         const info = await response.json();
-
+        
         const infoContainer = document.getElementById('current-project-info');
-
+        
         let packagesHtml = '';
         if (info.packages && info.packages.length > 0) {
             packagesHtml = `
@@ -208,7 +188,7 @@ async function loadCurrentProjectInfo() {
                 </div>
             `;
         }
-
+        
         infoContainer.innerHTML = `
             <div class="project-info-item">
                 <span class="project-info-label">Current Path:</span>
@@ -222,17 +202,20 @@ async function loadCurrentProjectInfo() {
         `;
     } catch (error) {
         console.error('Error loading project info:', error);
-        document.getElementById('current-project-info').innerHTML =
+        document.getElementById('current-project-info').innerHTML = 
             '<div class="loading">Error loading project information</div>';
     }
 }
+
+// --- COVERAGE FUNCTIONS (unchanged) ---
 
 function openHTMLCoverage(filename) {
     if (!filename) {
         alert('HTML coverage report not available');
         return;
     }
-
+    
+    // Open the HTML coverage report in a new tab/window
     const url = `/html-coverage/${encodeURIComponent(filename)}`;
     window.open(url, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
 }
@@ -254,8 +237,8 @@ function showCoverage(packageName) {
         })
         .catch(error => {
             console.error('Error fetching coverage:', error);
-            alert(`Could not load coverage data for package: ${packageName}.\nSee the console for more details.`);
-            closeCoverage();
+            document.getElementById('file-list').innerHTML = '<div class="file-item">Error loading coverage data</div>';
+            document.getElementById('source-code').innerHTML = '<div class="loading">Could not load coverage.</div>';
         });
 }
 
@@ -353,14 +336,20 @@ function togglePackage(header) {
 
 function runTests() {
     const resultsEl = document.getElementById('results');
-    resultsEl.innerHTML = '<div class="loading">Finding tests...</div>';
+    // Set a "running" state on the results element itself.
+    resultsEl.innerHTML = '<div class="loading">Running tests...</div>';
+    resultsEl.dataset.isRunning = "true";
 
     fetch('/run-tests', { method: 'POST' })
         .catch(error => {
             console.error('Error running tests:', error);
             resultsEl.innerHTML = '<div class="loading">Failed to start tests.</div>';
+            // Clean up the state attribute on failure.
+            delete resultsEl.dataset.isRunning;
         });
 }
+
+// --- INITIALIZATION ---
 
 connectWebSocket();
 
@@ -372,16 +361,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const projectModal = document.getElementById('project-modal');
     const coverageModal = document.getElementById('coverage-modal');
 
+    // Button event listeners
     runButton.addEventListener('click', runTests);
     projectButton.addEventListener('click', showProjectModal);
     setPathButton.addEventListener('click', setProjectPath);
 
+    // Enter key support for manual path input
     manualPathInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             setProjectPath();
         }
     });
 
+    // Modal close handlers
     projectModal.addEventListener('click', (event) => {
         if (event.target === projectModal) {
             closeProjectModal();
@@ -394,6 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Escape key support
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             if (projectModal.classList.contains('show')) {
@@ -405,5 +398,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Auto-run tests shortly after page load
     setTimeout(runTests, 1000);
 });

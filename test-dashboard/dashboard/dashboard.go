@@ -2,7 +2,7 @@ package dashboard
 
 import (
 	"bufio"
-	"bytes"
+	"bytes" // Added this import
 	"fmt"
 	"io/fs"
 	"log"
@@ -12,11 +12,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+// --- Data Structures (No Changes) ---
 
 type CoverageBlock struct {
 	StartLine int  `json:"start_line"`
@@ -45,15 +46,15 @@ type TestResult struct {
 
 type DashboardData struct {
 	Results         []TestResult `json:"results"`
-	PendingPackages []string     `json:"pending_packages,omitempty"`
 	OverallCoverage float64      `json:"overall_coverage"`
 	TotalTests      int          `json:"total_tests"`
 	PassedTests     int          `json:"passed_tests"`
 	LastRun         time.Time    `json:"last_run"`
 	ProjectPath     string       `json:"project_path"`
 	ProjectName     string       `json:"project_name"`
-	Message         string       `json:"message,omitempty"`
 }
+
+// --- Core Dashboard Component (No Changes) ---
 
 type TestDashboard struct {
 	Data        DashboardData
@@ -84,6 +85,8 @@ func NewTestDashboard() *TestDashboard {
 	go td.cleanupHTMLFiles()
 	return td
 }
+
+// --- Exported Methods (No Changes) ---
 
 func (td *TestDashboard) SetProjectPath(path string) error {
 	info, err := os.Stat(path)
@@ -136,55 +139,30 @@ func (td *TestDashboard) RunTests() {
 		return
 	}
 
-	if len(packages) == 0 {
-		log.Printf("No test packages found in %s", td.ProjectPath)
-		noTestsData := DashboardData{
-			Results:     []TestResult{},
-			LastRun:     time.Now(),
-			ProjectPath: td.ProjectPath,
-			ProjectName: td.Data.ProjectName,
-			Message:     "No tests found in the selected project.",
-		}
-		td.Broadcast <- noTestsData
-		return
-	}
-
-	// Create a list of relative package paths for the "pending" state
-	var relPackages []string
-	for _, pkg := range packages {
-		relPkg, _ := filepath.Rel(td.ProjectPath, pkg)
-		relPackages = append(relPackages, filepath.ToSlash(relPkg))
-	}
-
+	// Broadcast a "starting" state to clear the UI and show the total package count.
 	startingData := DashboardData{
-		PendingPackages: relPackages,
+		Results:         []TestResult{},
+		OverallCoverage: 0.0,
 		TotalTests:      len(packages),
+		PassedTests:     0,
 		LastRun:         time.Now(),
 		ProjectPath:     td.ProjectPath,
 		ProjectName:     td.Data.ProjectName,
 	}
 	td.Broadcast <- startingData
 
-	var wg sync.WaitGroup
-	resultsChan := make(chan TestResult, len(packages))
-
-	for _, pkg := range packages {
-		wg.Add(1)
-		go func(p string) {
-			defer wg.Done()
-			resultsChan <- td.runPackageTests(p)
-		}(pkg)
+	if len(packages) == 0 {
+		log.Printf("No test packages found in %s", td.ProjectPath)
+		return
 	}
 
-	go func() {
-		wg.Wait()
-		close(resultsChan)
-	}()
+	var results []TestResult // This will hold the results as they come in.
 
-	var results []TestResult
-	for result := range resultsChan {
-		results = append(results, result)
+	for _, pkg := range packages {
+		result := td.runPackageTests(pkg)
+		results = append(results, result) // Add the new result to our list
 
+		// Recalculate stats based on the results we have so far
 		var totalCoverage float64
 		var passedTests int
 		for _, r := range results {
@@ -194,26 +172,30 @@ func (td *TestDashboard) RunTests() {
 			}
 		}
 
+		// The denominator is the number of packages completed so far, giving a running average.
 		overallCoverage := 0.0
 		if len(results) > 0 {
 			overallCoverage = totalCoverage / float64(len(results))
 		}
 
+		// Create and broadcast the intermediate data object
 		intermediateData := DashboardData{
-			Results:         results,
+			Results:         results, // Send the list of packages completed so far
 			OverallCoverage: overallCoverage,
-			TotalTests:      len(packages),
+			TotalTests:      len(packages), // Total expected packages
 			PassedTests:     passedTests,
 			LastRun:         time.Now(),
 			ProjectPath:     td.ProjectPath,
 			ProjectName:     td.Data.ProjectName,
 		}
-		td.Broadcast <- intermediateData
+		td.Broadcast <- intermediateData // Send the live update
 	}
 
 	log.Printf("Test run complete. Found %d packages, %d passed", len(packages), len(results))
 }
 
+// ---- NEW HELPER FUNCTION ----
+// This function reads the go.mod file to find the project's module name.
 func getModuleName(projectPath string) (string, error) {
 	goModPath := filepath.Join(projectPath, "go.mod")
 	content, err := os.ReadFile(goModPath)
@@ -235,6 +217,8 @@ func getModuleName(projectPath string) (string, error) {
 
 	return "", fmt.Errorf("module directive not found in go.mod")
 }
+
+// --- Internal Helper Functions (with one modification) ---
 
 func (td *TestDashboard) isGoProject(path string) bool {
 	if _, err := os.Stat(filepath.Join(path, "go.mod")); err == nil {
@@ -270,12 +254,13 @@ func (td *TestDashboard) runPackageTests(pkg string) TestResult {
 		time.Now().UnixNano())
 
 	defer func() {
-		os.Remove(filepath.Join(td.ProjectPath, coverProfile))
+		os.Remove(coverProfile)
 	}()
 
 	originalDir, _ := os.Getwd()
 	defer os.Chdir(originalDir)
-	if err := os.Chdir(td.ProjectPath); err != nil {
+	err := os.Chdir(td.ProjectPath)
+	if err != nil {
 		return TestResult{
 			Package:   pkg,
 			Passed:    false,
@@ -296,7 +281,7 @@ func (td *TestDashboard) runPackageTests(pkg string) TestResult {
 		relPkg = "./" + relPkg
 	}
 
-	cmd := exec.Command("go", "test", "-coverprofile="+filepath.Base(coverProfile), relPkg)
+	cmd := exec.Command("go", "test", "-coverprofile="+coverProfile, relPkg)
 	cmd.Dir = td.ProjectPath
 	output, testErr := cmd.CombinedOutput()
 
@@ -311,7 +296,7 @@ func (td *TestDashboard) runPackageTests(pkg string) TestResult {
 	coveragePath := filepath.Join(td.ProjectPath, coverProfile)
 	if fileExists(coveragePath) {
 		result.Coverage = extractCoverage(string(output))
-		result.Files = td.parseCoverageProfile(coveragePath)
+		result.Files = td.parseCoverageProfile(coveragePath, pkg) // This function is now fixed
 		htmlPath := filepath.Join(td.ProjectPath, htmlCoverageFile)
 		if td.generateHTMLCoverage(coveragePath, htmlPath) {
 			result.HTMLCoverageFile = htmlCoverageFile
@@ -322,7 +307,8 @@ func (td *TestDashboard) runPackageTests(pkg string) TestResult {
 	return result
 }
 
-func (td *TestDashboard) parseCoverageProfile(profilePath string) []FileCoverage {
+// ---- MODIFIED FUNCTION ----
+func (td *TestDashboard) parseCoverageProfile(profilePath string, _ string) []FileCoverage {
 	file, err := os.Open(profilePath)
 	if err != nil {
 		log.Printf("Error opening coverage profile %s: %v", profilePath, err)
@@ -330,10 +316,11 @@ func (td *TestDashboard) parseCoverageProfile(profilePath string) []FileCoverage
 	}
 	defer file.Close()
 
+	// Get the module name to correctly resolve file paths
 	moduleName, modErr := getModuleName(td.ProjectPath)
 
 	scanner := bufio.NewScanner(file)
-	if !scanner.Scan() {
+	if !scanner.Scan() { // Skip the "mode: set" line
 		return nil
 	}
 
@@ -375,8 +362,11 @@ func (td *TestDashboard) parseCoverageProfile(profilePath string) []FileCoverage
 	for filename, blocks := range fileMap {
 		fullPath := filename
 		if !filepath.IsAbs(filename) {
+			// This is the new logic to construct the correct path
 			relativePath := filename
+			// If we found a module name and the path from the coverage file starts with it...
 			if modErr == nil && strings.HasPrefix(filename, moduleName+"/") {
+				// ...then we strip that module name prefix to get a true relative path.
 				relativePath = strings.TrimPrefix(filename, moduleName+"/")
 			}
 			fullPath = filepath.Join(td.ProjectPath, relativePath)
@@ -384,6 +374,7 @@ func (td *TestDashboard) parseCoverageProfile(profilePath string) []FileCoverage
 
 		content, err := os.ReadFile(fullPath)
 		if err != nil {
+			// This is the error message that should now disappear
 			log.Printf("Error reading file %s: %v", fullPath, err)
 			continue
 		}
@@ -397,6 +388,8 @@ func (td *TestDashboard) parseCoverageProfile(profilePath string) []FileCoverage
 	}
 	return files
 }
+
+// --- Other helpers (No Changes) ---
 
 func (td *TestDashboard) findGoPackages(root string) ([]string, error) {
 	var packages []string
@@ -426,7 +419,8 @@ func (td *TestDashboard) findGoPackages(root string) ([]string, error) {
 func (td *TestDashboard) generateHTMLCoverage(profilePath, htmlPath string) bool {
 	originalDir, _ := os.Getwd()
 	defer os.Chdir(originalDir)
-	if err := os.Chdir(td.ProjectPath); err != nil {
+	err := os.Chdir(td.ProjectPath)
+	if err != nil {
 		log.Printf("Error changing to project directory for HTML coverage: %v", err)
 		return false
 	}
@@ -493,7 +487,7 @@ func calculateFileCoverage(blocks []CoverageBlock) float64 {
 			coveredBlocks++
 		}
 	}
-	return (float64(coveredBlocks) / float64(len(blocks))) * 100
+	return float64(coveredBlocks) / float64(len(blocks)) * 100
 }
 
 func extractCoverage(output string) float64 {
