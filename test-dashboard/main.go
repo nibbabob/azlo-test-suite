@@ -40,6 +40,11 @@ func main() {
 	r.HandleFunc("/set-project-path", h.HandleSetProjectPath).Methods("POST")
 	r.HandleFunc("/project-info", h.HandleGetProjectInfo).Methods("GET")
 
+	// --- ADDED: Handle favicon requests to prevent 404 errors ---
+	r.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
 	// Create a sub-filesystem for the static directory
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -52,7 +57,6 @@ func main() {
 
 	// Root handler to serve the index.html from embedded files
 	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// ---- CHANGE: Read the file into a byte slice first ----
 		indexHTML, err := fs.ReadFile(staticFS, "index.html")
 		if err != nil {
 			log.Printf("Error reading embedded index.html: %v", err)
@@ -60,11 +64,7 @@ func main() {
 			return
 		}
 
-		// ---- CHANGE: Create a bytes.Reader, which implements io.ReadSeeker ----
 		reader := bytes.NewReader(indexHTML)
-
-		// ---- CHANGE: Serve the content using the new reader ----
-		// We pass a zero Time value for modtime as it's not essential here.
 		http.ServeContent(w, r, "index.html", time.Time{}, reader)
 	})
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"azlo-test-suite/dashboard" // <-- IMPORTANT: Replace with your module name
 
@@ -59,12 +60,15 @@ func (h *Handler) ServeCoverageData(w http.ResponseWriter, r *http.Request) {
 	packageName := vars["package"]
 
 	for _, result := range h.Dashboard.Data.Results {
-		if result.Package == packageName {
+		// --- MODIFIED: Make package name matching more robust ---
+		// The backend might store names like "./calculator" while the frontend requests "calculator"
+		if result.Package == packageName || strings.TrimPrefix(result.Package, "./") == packageName {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(result.Files)
 			return
 		}
 	}
+	log.Printf("Coverage data not found for package: %s", packageName)
 	http.Error(w, "Package not found", http.StatusNotFound)
 }
 

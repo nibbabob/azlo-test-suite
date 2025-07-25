@@ -116,6 +116,7 @@ body {
 .coverage-low { color: #F44336; }
 .passed { color: #4CAF50; }
 .failed { color: #F44336; }
+.pending { color: #2196F3; } /* Added */
 
 .results {
     padding: 2rem;
@@ -135,6 +136,10 @@ body {
 
 .package-result.failed {
     border-left-color: #F44336;
+}
+
+.package-result.pending { /* Added */
+    border-left-color: #2196F3;
 }
 
 .package-header {
@@ -194,6 +199,12 @@ body {
 .status-badge.failed {
     background: #F44336;
     color: white;
+}
+
+.status-badge.pending { /* Added */
+    background: #2196F3;
+    color: white;
+    animation: pulse 1.5s infinite;
 }
 
 .duration {
