@@ -7,9 +7,8 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
-    
     permissions:
-      contents: write
+      contents: write # Required for creating releases and tags
 
     steps:
       # 1. Check out the repository code
@@ -22,24 +21,25 @@ jobs:
         with:
           go-version: '1.24'
 
-      # 3. FIX: Make the cache key more robust
+      # 3. FIX: Use a wildcard to robustly find the go.sum for caching
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
-          # Use a wildcard to find go.sum in any subdirectory
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }} # Use wildcard to find go.sum
           restore-keys: |
             ${{ runner.os }}-go-
 
       # 4. Install Dependencies, Tidy, and Test
       - name: Install Dependencies, Tidy, and Test
-        working-directory: ./test-dashboard
+        working-directory: ./test-dashboard # Run from the subdirectory
         run: |
           go mod tidy
           go test -v ./...
 
-      # 5. Bump version and push tag (no changes here)
+      # 5. Bump version and push tag
+      # Note: This action may still show a deprecation warning until the author updates it.
+      # This is the last remaining source of the warnings.
       - name: Bump version and push tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.2
@@ -48,56 +48,25 @@ jobs:
           
       # 6. Build the application
       - name: Build Application
-        working-directory: ./test-dashboard
+        working-directory: ./test-dashboard # Run from the subdirectory
         run: |
           go build -v -o ../azlo-dashboard-linux-amd64 .
           go build -v -o ../azlo-dashboard-windows-amd64.exe .
           go build -v -o ../azlo-dashboard-darwin-amd64 .
 
-      # 7. DEBUG: Add a step to list files in the workspace root
-      # This helps confirm that the build step created the files correctly
-      - name: List files in workspace
-        run: ls -R
-
-      # 8. FIX: Update to the latest version of the create-release action
-      - name: Create Release
-        id: create-release
-        uses: actions/create-release@v1 # This is the latest major version
+      # 7. FIX: Create Release and Upload Assets with a single, modern action
+      # This replaces the old create-release and upload-release-asset steps
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
         with:
+          # Use the tag created in the previous step
           tag_name: ${{ steps.tag_version.outputs.new_tag }}
-          release_name: Release ${{ steps.tag_version.outputs.new_tag }}
+          # Use the changelog from the tag action for the release body
           body: ${{ steps.tag_version.outputs.changelog }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-      # 9. FIX: Upload each build artifact individually
-      # This is more reliable than using a wildcard with the old action.
-      - name: Upload Linux Artifact
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ./azlo-dashboard-linux-amd64
-          asset_name: azlo-dashboard-linux-amd64
-          asset_content_type: application/octet-stream
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Windows Artifact
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ./azlo-dashboard-windows-amd64.exe
-          asset_name: azlo-dashboard-windows-amd64.exe
-          asset_content_type: application/vnd.microsoft.portable-executable
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload macOS Artifact
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }}
-          asset_path: ./azlo-dashboard-darwin-amd64
-          asset_name: azlo-dashboard-darwin-amd64
-          asset_content_type: application/octet-stream
+          # Tell the action where to find the files to upload
+          files: |
+            ./azlo-dashboard-linux-amd64
+            ./azlo-dashboard-windows-amd64.exe
+            ./azlo-dashboard-darwin-amd64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
