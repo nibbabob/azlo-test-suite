@@ -1,2 +1,4 @@
 azlo-dashboard.exe
-go.mod
+azlo-dashboard-linux-amd64
+azlo-dashboard-windows-amd64.exe
+azlo-dashboard-darwin-amd64
