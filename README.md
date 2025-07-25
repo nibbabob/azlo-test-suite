@@ -50,7 +50,7 @@ Pick your Go project folder, and you're off. Doesn't matter how your project is 
 1. **Clone the thing:**
    ```bash
    git clone <repository-url> azlo-test-suite
-   cd azlo-test-suite
+   cd azlo-test-suite/test-dashboard
    ```
 
 2. **Install the stuff it needs:**
