@@ -10,269 +10,187 @@
   <img src="https://img.shields.io/badge/Dark%20Theme-Professional-6c2c91?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="Dark Theme" />
 </p>
 
-The **Azlo Test Suite** transforms the tedious process of running Go tests into a delightful, productive experience. Built with the problem-solving philosophy of [Azlo.pro](https://www.azlo.pro), this tool eliminates the friction between writing code and understanding test coverage.
 
-## 🎯 The Problem We Solve
+Hey! So, check this out. I made a thing.
 
-**Before:** Developers waste time switching between terminal, coverage files, and IDEs to understand test results and coverage gaps.
+## The Problem I Got Tired Of
 
-**After:** One elegant dashboard that provides real-time test feedback, interactive coverage exploration, and professional HTML reports - all styled for modern development workflows.
+**Before:** Jumping between the terminal, a browser tab for coverage, and my code editor just to see if my tests passed. It's clunky and kills the flow.
 
----
-
-## ✨ Features That Drive Results
-
-### **🚀 Real-Time Test Execution**
-- **WebSocket-powered updates**: See test results instantly as they complete
-- **Multi-package discovery**: Automatically finds and tests all packages with test files
-- **One-click testing**: Run comprehensive test suites with a single button
-- **Execution timing**: Monitor test performance and identify slow tests
-
-### **📊 Dual Coverage Visualization**
-- **Interactive Coverage Explorer**: Browse coverage file-by-file with line-level highlighting
-- **Native Go HTML Reports**: Professional coverage reports with custom dark theme styling
-- **Coverage Analytics**: Color-coded badges and metrics (green ≥80%, yellow 60-79%, red <60%)
-- **Real-time Updates**: Watch coverage improve as you write tests
-
-### **🎨 Professional Dark Theme UI**
-- **Modern Design**: Clean, distraction-free interface optimized for extended use
-- **Syntax Highlighting**: Proper Go code highlighting in coverage views
-- **Responsive Layout**: Works seamlessly on different screen sizes
-- **Developer-Focused**: Built by developers, for developers
-
-### **📁 Flexible Project Management**
-- **Any Go Project**: Works with any Go project structure
-- **Easy Project Switching**: Browse folders or enter paths manually
-- **Project Validation**: Ensures selected directories are valid Go projects
-- **Cross-Platform**: Windows, macOS, and Linux support
+**After:** One clean dashboard. You see test results pop up in real-time. You can explore your code coverage interactively. It just works.
 
 ---
 
-## 🚀 Quick Start
+## ✨ What It Actually Does
 
-### Prerequisites
-- **Go 1.24+** installed on your system
-- A Go project with test files (`*_test.go`)
+### **🚀 Real-Time Everything**
+Powered by WebSockets, you see tests pass or fail the second they're done. No more waiting. It finds all your test packages automatically and tells you how long they took to run.
 
-### Installation & Setup
+### **📊 See Your Coverage Two Ways**
+* An **Interactive Explorer** to click through files and see covered lines.
+* The standard Go **HTML Report**, but styled with a proper dark theme so it doesn't burn your eyes out.
+* You get a clear coverage score, color-coded so you know if you're doing good (green's the goal!).
 
-1. **Clone the Azlo Test Suite**:
+### **🎨 A UI That's Actually Nice to Look At**
+Clean, dark theme. It's designed for people who spend hours looking at code.
+
+### **📁 It Just Works**
+Pick your Go project folder, and you're off. Doesn't matter how your project is structured.
+
+---
+
+## 🚀 Getting Started
+
+**Prerequisites:**
+* Go 1.24+
+* A Go project with some `*_test.go` files.
+
+**Let's Go:**
+
+1. **Clone the thing:**
    ```bash
    git clone <repository-url> azlo-test-suite
    cd azlo-test-suite
    ```
 
-2. **Install dependencies**:
+2. **Install the stuff it needs:**
    ```bash
    go mod tidy
    ```
 
-3. **Start the dashboard**:
+3. **Run it:**
    ```bash
    go run main.go
    ```
 
-4. **Open your browser** to `http://localhost:8484`
+4. **Open `http://localhost:8484` in your browser.**
 
-### First Run Experience
-
-1. **Select Your Project**: Click "📁 Select Project" to choose your Go project folder
-2. **Run Tests**: Click "Run Tests" to execute your test suite
-3. **Explore Coverage**: Use both the interactive coverage viewer and HTML reports
-4. **Keep It Open**: Perfect for a second monitor while you develop
+Stick the dashboard on a second monitor while you code. Write a test, save the file, and watch the coverage percentage go up. It's a great feeling.
 
 ---
 
-## 📊 Understanding Your Dashboard
+## 📊 What You'll See
 
 ### **Project Info Bar**
 Shows your current project name and path - always know which project you're testing.
 
 ### **Stats Overview**
-- **Overall Coverage**: Project-wide coverage percentage with color coding
-- **Total Packages**: Number of packages containing tests
-- **Passed/Failed**: Quick status overview across all packages
+* **Overall Coverage**: Project-wide coverage with color coding (green ≥80%, yellow 60-79%, red <60%)
+* **Total Packages**: Number of packages with tests
+* **Passed/Failed**: Quick status overview
 
 ### **Package Results**
-Each package displays:
-- **Status Border**: Green (passed) or red (failed)
-- **Coverage Badge**: Color-coded coverage percentage
-- **Duration**: Test execution time in milliseconds
-- **Expandable Details**: Click to see full test output
+Each package shows:
+* **Status**: Green border (passed) or red border (failed)
+* **Coverage Badge**: Color-coded percentage
+* **Duration**: How long tests took
+* **Expandable Details**: Click to see full test output
 
 ### **Coverage Options**
-For each package with coverage data:
-- **📊 View Coverage**: Interactive file browser with line-by-line highlighting
-- **📋 HTML Report**: Go's native coverage report (opens in new tab)
+For packages with coverage:
+* **📊 View Coverage**: Interactive file browser with line-by-line highlighting
+* **📋 HTML Report**: Go's native coverage report (opens in new tab)
 
 ---
 
-## 🛠️ Advanced Configuration
+## 🛠️ How It's Built
 
-### **Environment Variables**
+I love to orchestrate systems and see them run smoothly. This is no different.
+
+### **Backend (Go)**
+Just pure Go with Gorilla WebSocket for the real-time magic and Mux for handling requests. It calls the `go test` and `go tool cover` commands you already use.
+
+### **Frontend (Vanilla JS)**
+No heavy frameworks. Just simple, clean JavaScript that talks to the backend and makes everything look good.
+
+### **Privacy-First**
+This runs entirely on your machine. No data goes anywhere. No tracking. That's a big deal for me.
+
+---
+
+## 🎯 Usage Tips
+
+### **Daily Workflow**
+1. **Keep it visible** on a second monitor or split screen
+2. **Write tests incrementally** and watch coverage improve
+3. **Use HTML reports** for deep coverage analysis
+4. **Set coverage goals** - aim for those green badges
+5. **Monitor test speed** to catch slow tests early
+
+### **Team Stuff**
+* **Code Reviews**: Share HTML coverage reports
+* **CI/CD**: Validate coverage before deployment
+* **Onboarding**: Help new people understand test coverage
+
+---
+
+## 🔧 Configuration
+
+### **Custom Port**
 ```bash
-# Custom port (default: 8484)
+# Different port if 8484 is busy
 PORT=3000 go run main.go
-
-# Example with different port
-PORT=9090 go run main.go
 ```
 
-### **Project Structure Support**
-Works with any Go project layout:
+### **Project Structure**
+Works with any Go layout. Whether you've got:
 ```
 your-project/
 ├── go.mod
 ├── main.go
 ├── pkg/
-│   ├── auth/
-│   │   ├── auth.go
-│   │   └── auth_test.go
-│   └── handlers/
-│       ├── handlers.go
-│       └── handlers_test.go
-├── internal/
-│   └── service/
-│       ├── service.go
-│       └── service_test.go
-└── cmd/
-    └── app/
-        └── main.go
+│   └── something/
+│       ├── code.go
+│       └── code_test.go
+└── internal/
+    └── stuff/
+        ├── more.go
+        └── more_test.go
 ```
 
----
-
-## 🎯 Best Practices for Maximum Impact
-
-### **Development Workflow**
-1. **Keep the dashboard visible** on a second monitor or split screen
-2. **Write tests incrementally** and watch coverage improve in real-time
-3. **Use HTML reports** for comprehensive coverage analysis
-4. **Set coverage goals** - aim for green badges (≥80% coverage)
-5. **Monitor test duration** to identify performance bottlenecks
-
-### **Team Usage**
-- **Code Reviews**: Use HTML coverage reports to identify untested code paths
-- **CI/CD Integration**: Validate coverage thresholds before deployment
-- **Onboarding**: Help new team members understand project test coverage
-- **Technical Debt**: Track coverage improvements over time
+It'll find your tests and run them.
 
 ---
 
-## 🔧 Technical Architecture
+## 🚨 If Things Break
 
-### **Backend (Go)**
-- **Gorilla WebSocket**: Real-time client communication
-- **Gorilla Mux**: HTTP routing and static file serving
-- **Go Toolchain Integration**: Native `go test` and `go tool cover` usage
-- **File System Monitoring**: Automatic cleanup of temporary coverage files
+**No packages found?**
+* Make sure you have `*_test.go` files
+* Check that `go test` works from the command line
 
-### **Frontend (Vanilla JS)**
-- **WebSocket Client**: Real-time dashboard updates
-- **Modern CSS**: Professional dark theme with responsive design
-- **No Dependencies**: Pure JavaScript for maximum compatibility
-- **File System Access API**: Modern folder selection (with fallback)
+**Coverage not showing?**
+* Verify your tests actually run code
+* Try `go test -cover` manually first
 
-### **Security & Privacy**
-- **Local Development Only**: No data leaves your machine
-- **Temporary Files**: Automatic cleanup of coverage reports
-- **No Tracking**: Built with privacy-first principles from [Azlo.pro](https://www.azlo.pro)
+**Can't connect?**
+* Port 8484 might be busy - try `PORT=9090 go run main.go`
+* Check the console for error messages
 
----
-
-## 🚀 API Reference
-
-### **WebSocket Endpoints**
-- `GET /ws` - Real-time dashboard updates
-
-### **HTTP Endpoints**
-- `POST /run-tests` - Trigger test execution
-- `GET /coverage/{package}` - Get package coverage data
-- `GET /html-coverage/{filename}` - Serve styled HTML coverage reports
-- `POST /set-project-path` - Change project directory
-- `GET /project-info` - Get current project information
+**Project path issues?**
+* Use the full path to your project
+* Make sure there's a `go.mod` file or `.go` files in the directory
 
 ---
 
-## 🛠️ Troubleshooting
+## 💡 Why I Made This
 
-### **Common Issues**
+Because I wanted it. It's a tool built to solve a problem that was bugging me, designed with the same problem-solving energy I put into **[Azlo.pro](https://www.azlo.pro)**. 
 
-**No packages found**
-- Ensure your project has `*_test.go` files
-- Check that tests are in the same package as your code
+At Azlo.pro, I build custom automation and high-performance backends that eliminate manual work. This dashboard scratches the same itch - taking something tedious (checking test results) and making it smooth and enjoyable.
 
-**Coverage not showing**
-- Verify your tests actually execute code paths
-- Check that `go test -cover` works from command line
+It's about creating things that are not only functional but also a pleasure to use. I'm the "glass half full" type, and I believe our tools should reflect that.
 
-**WebSocket connection failed**
-- Ensure port 8484 is available
-- Try setting a different port: `PORT=9090 go run main.go`
-
-**Project path issues**
-- Use absolute paths when possible
-- Ensure the directory contains a `go.mod` file or `.go` files
-
-### **Debug Mode**
-Run with verbose logging:
-```bash
-go run main.go 2>&1 | tee dashboard.log
-```
+Built with ADHD-powered focus and a love for elegant systems. I hope you find it useful!
 
 ---
 
-## 💡 Why Choose Azlo Test Suite?
+## 🤝 Questions? Issues?
 
-### **Problem-Focused Design**
-Built to solve real developer pain points - not just another dashboard. Every feature addresses specific testing workflow inefficiencies.
-
-### **Production-Ready Architecture**
-Enterprise-grade patterns that handle real projects, complex structures, and team environments.
-
-### **Developer Experience First**
-Created by developers who understand the daily grind of test-driven development and coverage optimization.
-
----
-
-## 🤝 About Azlo.pro
-
-The Azlo Test Suite represents the problem-solving philosophy of [**Azlo.pro**](https://www.azlo.pro) - custom development solutions that eliminate manual work and streamline business processes.
-
-**Azlo.pro specializes in:**
-- 🤖 **Custom Automation**: Robust workflows beyond Zapier limitations
-- ⚡ **High-Performance Backends**: Blazing-fast APIs with Go & Rust
-- 🚀 **Rapid MVP Development**: Ideas to working prototypes at incredible speed
-- 🧠 **AI Integration**: LLM-powered workflow automation
-- 📊 **Data Unification**: Transform messy data into actionable insights
-
-*Built with ADHD-powered focus and privacy-first principles.*
-
----
-
-## 📞 Support & Contributions
-
-**Need Help?**
-- Check the troubleshooting section above
-- Review the [GitHub Issues](repository-issues-url)
-- Contact: [christian.nielsen@azlo.pro](mailto:christian.nielsen@azlo.pro)
-
-**Want to Contribute?**
-This tool is designed to be easily customizable for specific team needs. Fork it, enhance it, make it yours.
-
----
-
-## 📄 License
-
-This project is provided as-is for educational and development use.
+Fork it, mess with it, make it your own. If you get stuck, open an issue on GitHub or shoot me an email: [christian.nielsen@azlo.pro](mailto:christian.nielsen@azlo.pro)
 
 ---
 
 <p align="center">
-  <strong>Stop drowning in manual testing workflows.</strong><br>
-  <em>Let the Azlo Test Suite automate your Go testing experience.</em>
-</p>
-
-<p align="center">
-  <a href="https://www.azlo.pro">🌐 Learn more about Azlo.pro custom development services</a>
+  <strong>Stop context-switching between terminal and browser.</strong><br>
+  <em>Let the dashboard do the work.</em>
 </p>
