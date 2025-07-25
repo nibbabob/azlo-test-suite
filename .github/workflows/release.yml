@@ -7,6 +7,11 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    
+    # FIX 1: Grant permissions for the job to create releases and tags.
+    permissions:
+      contents: write
+
     steps:
       # 1. Check out the repository code
       - name: Checkout code
@@ -18,39 +23,42 @@ jobs:
         with:
           go-version: '1.24'
 
-      # 3. Cache Go modules to speed up future builds
+      # 3. Cache Go modules
       - name: Cache Go modules
         uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
-          # The key now correctly points to the go.sum inside the test-dashboard directory
+          # FIX 2: Explicitly point to the go.sum in its subdirectory
           key: ${{ runner.os }}-go-${{ hashFiles('test-dashboard/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
 
-      # 4. Install Dependencies
-      - name: Install Dependencies
-        working-directory: ./test-dashboard
-        run: go mod tidy
+      # 4. Install Dependencies and Run Tests from the root
+      # No more 'working-directory'. We just tell Go where the project is.
+      - name: Run Tests and Tidy Modules
+        run: |
+          go work init ./test-dashboard
+          go work sync
+          go test -v ./...
+          go mod tidy
 
-
-      # 6. Create a new version tag (e.g., v1.0.1)
+      # 5. Bump version and push tag
       - name: Bump version and push tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           
-      # 7. Build the application
+      # 6. Build the application
       - name: Build Application
-        working-directory: ./test-dashboard
         run: |
-          # Build and output the files to the REPOSITORY ROOT directory
-          go build -v -o ../azlo-dashboard-linux-amd64 .
-          go build -v -o ../azlo-dashboard-windows-amd64.exe .
-          go build -v -o ../azlo-dashboard-darwin-amd64 .
+          # Build from the root, telling it which package to build.
+          # The output files will be created in the root.
+          go build -v -o azlo-dashboard-linux-amd64 ./test-dashboard
+          go build -v -o azlo-dashboard-windows-amd64.exe ./test-dashboard
+          go build -v -o azlo-dashboard-darwin-amd64 ./test-dashboard
 
-      # 8. Create a GitHub Release
+      # 7. Create a GitHub Release
       - name: Create Release
         id: create-release
         uses: actions/create-release@v1
@@ -61,33 +69,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
-      # 9. Upload all build artifacts to the release
-      - name: Upload Linux Artifact
+      # 8. Upload Build Artifacts
+      - name: Upload Build Artifacts
         uses: actions/upload-release-asset@v1
         with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }} 
-          asset_path: ./azlo-dashboard-linux-amd64
-          asset_name: azlo-dashboard-linux-amd64
-          asset_content_type: application/octet-stream
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Windows Artifact
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }} 
-          asset_path: ./azlo-dashboard-windows-amd64.exe
-          asset_name: azlo-dashboard-windows-amd64.exe
-          asset_content_type: application/octet-stream
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Darwin (macOS) Artifact
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create-release.outputs.upload_url }} 
-          asset_path: ./azlo-dashboard-darwin-amd64
-          asset_name: azlo-dashboard-darwin-amd64
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
+          asset_path: ./azlo-dashboard-*
+          asset_name: azlo-dashboard-${{ runner.os }}
           asset_content_type: application/octet-stream
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
